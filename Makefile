@@ -1,2 +1,2 @@
 all:
-	gcc -std=c11 servertest.c
+	gcc src/a.c -lpthread && ./a.out 127.0.0.1 8000 10 100 3
