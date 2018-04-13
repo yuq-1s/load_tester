@@ -6,7 +6,7 @@
 
 #define TIMEOUT 500
 #define BUFFER_SIZE 1<<10
-#define LIFE 10
+#define LIFE 20
 
 long total_connection_num;
 _Atomic long failed_connection_num;
@@ -64,14 +64,9 @@ void http_test(struct pollfd* pollfds, int* lives, enum Status* status,
     if (poll_err < 0) {
       perror("poll error");
       exit(1);
-    } else if (poll_err == 0) {
-      for (int i = 0; i < remain_concurrency; ++i) {
-        printf("timeout of thread %lu connection %d\n", pthread_self(), i);
-        lives[i]--;
-      }
     } else {
+      // FIXME: Is erase OK?
       for (int i = 0; i < remain_concurrency; ++i) {
-        assert(lives[i] >= 0);
         if (lives[i] == 0) {
           failed_connection_num++;
 
@@ -94,31 +89,32 @@ new_connection:
             }
             remain_concurrency--;
           }
-
-        } else { // lives[i] > 0
+        } else if (poll_err == 0) { // and lives[i] > 0
+          /*printf("timeout of thread %lu connection %d\n", pthread_self(), i);*/
+          lives[i]--;
+        } else {
+          assert(lives[i] > 0);
+          assert(poll_err > 0);
           if (status[i] == WRITING && pollfds[i].revents & POLLOUT) {
             if ((write(pollfds[i].fd, HEADER, sizeof(HEADER))) == -1) {
               lives[i]--;
             } else {
               status[i] = READING;
               pollfds[i].events = POLLIN;
-              // TODO: goto poll
             }
           } else if (status[i] == READING && pollfds[i].revents & POLLIN) {
             while ((read_err = read(pollfds[i].fd, buffer, sizeof(buffer))) > 0);
             if (read_err == -1) {
-              // FIXME: code duplication
               lives[i]--;
             } else {
-              // printf("read success: read_err == 0\n");
               assert(read_err == 0);
               success_connection_num++;
               goto new_connection;
             }
-          } else {/* not polled to this */}
-        } // lives[i] > 0
+          } else {/* nothing polled to this */}
+        } // poll > 0 && lives[i] > 0
       } // foreach i
-    } // poll > 0
+    } // poll >= 0
   } // while remain > 0
 }
 
