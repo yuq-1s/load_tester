@@ -104,7 +104,7 @@ new_connection:
           assert(lives[i] > 0);
           assert(poll_err > 0);
           if (status[i] == WRITING && pollfds[i].revents & POLLOUT) {
-            if ((write(pollfds[i].fd, HEADER, sizeof(HEADER))) == -1) {
+            if ((send(pollfds[i].fd, HEADER, sizeof(HEADER), MSG_NOSIGNAL)) == -1) {
               lives[i]--;
             } else {
               status[i] = READING_STATUS_CODE;
