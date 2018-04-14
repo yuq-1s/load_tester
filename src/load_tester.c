@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <sys/timeb.h>
 #include <unistd.h>
 #include <sys/poll.h>
 #include <pthread.h>
@@ -23,6 +24,8 @@ const char HEADER[] = "GET / HTTP/1.0\r\n\r\n";
 const char GOOD_HEADER[] = "HTTP/1.1 200";
 const char ERROR_HEADER[] = "HTTP/1.1 500";
 static_assert(sizeof(GOOD_HEADER) == sizeof(ERROR_HEADER), "HEADER length not match");
+
+struct timeb start, end;
 
 enum Status { READING_STATUS_CODE, READING, WRITING };
 
@@ -50,7 +53,9 @@ void* http_test_init(void* info_) {
   }
   printf("Thread %lu is waiting for barrier\n", pthread_self());
   // wait for all concurrent connections from other threads established
-  pthread_barrier_wait(&init_barrier);
+  if (pthread_barrier_wait(&init_barrier) == PTHREAD_BARRIER_SERIAL_THREAD) {
+    ftime(&start);
+  }
   printf("Thread %lu initialization succeed\n", pthread_self());
   http_test(pollfds, lives, status, info);
   free(pollfds);
@@ -188,6 +193,8 @@ int main(int argc, char* argv[]) {
       .portno = atoi(argv[2]),
       .concurrency = total_concurrency % num_thread + step
     };
+
+  //ftime(&start);
   for (int i = 0; i < num_thread-1; ++i) {
     if ((pthread_create(thread_ids+i, NULL,
             http_test_init, (void*)(&info1))) != 0) {
@@ -205,6 +212,11 @@ int main(int argc, char* argv[]) {
   for (int i = 0; i < num_thread; ++i) {
     pthread_join(thread_ids[i], NULL);
   }
+  ftime(&end);
+
+  int diff = (int) (1000.0 * (end.time - start.time)
+        + (end.millitm - start.millitm));
+
   printf("success: %ld, fail: %ld\n",
       success_connection_num,
       failed_connection_num);
@@ -213,6 +225,7 @@ int main(int argc, char* argv[]) {
       http_response_500,
       http_response_other);
 
+  printf("%f requests per second on average\n", success_connection_num / (float)diff * 1000);
   free(thread_ids);
   return 0;
 }
