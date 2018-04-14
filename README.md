@@ -12,7 +12,7 @@ make
 
 ```
 ./load_tester
-  <hostname>              \
+  <ip>              \
   <port>                  \
   <num_concurrency>       \
   <total_connection_num>  \
@@ -21,14 +21,14 @@ make
 
 ## TODO
 
-- add progress bar
+- Add progress bar
 
-- reuse sockaddr in `get_socket`
+- enable `hostname` other than ip
 
 ## Known bugs
 
 - `other response` contains those connections did not successfully transfer
 `sizeof(GOOD_HEADER)` bytes (which may be 200 or 500)
 
-- threads may stuck at barrier when `num_thread` is large
+- Threads may stuck at barrier when `num_thread` is large
 

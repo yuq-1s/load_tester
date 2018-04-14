@@ -8,12 +8,9 @@
 #include <fcntl.h>
 #include <pthread.h>
 
-pthread_mutex_t resolve_host_mutex;
-
 struct test_info {
-  const int concurrency;
-  const char* hostname;
-  const int portno;
+  int concurrency;
+  struct sockaddr* server;
 };
 
 void set_fl(int fd, int flags) {
@@ -33,31 +30,15 @@ void set_fl(int fd, int flags) {
 }
 
 int get_socket(const struct test_info* info) {
-  pthread_mutex_lock(&resolve_host_mutex);
   int sockfd;
-  struct sockaddr_in serv_addr;
-  struct hostent *server;
 
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0) {
       perror("ERROR opening socket\n");
       exit(1);
   }
-  // FIXME: move gethostbyname out of the loop
-  server = gethostbyname(info->hostname);
-  if (server == NULL) {
-      perror("ERROR, no such host\n");
-      exit(1);
-  }
-  memset((char *) &serv_addr, 0, sizeof(serv_addr));
-  serv_addr.sin_family = AF_INET;
-  memcpy((char *)server->h_addr_list[0], 
-        (char *)&serv_addr.sin_addr.s_addr,
-        server->h_length);
-  serv_addr.sin_port = htons(info->portno);
   set_fl(sockfd, O_NONBLOCK);
   // Non blocking connect, for poll later
-  connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
-  pthread_mutex_unlock(&resolve_host_mutex);
+  connect(sockfd, (struct sockaddr *)info->server, sizeof(*info->server));
   return sockfd;
 }

@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <arpa/inet.h>
 #include <sys/timeb.h>
 #include <unistd.h>
 #include <sys/poll.h>
@@ -156,7 +157,7 @@ new_connection:
 
 int main(int argc, char* argv[]) {
   if (argc != 6) {
-      fprintf(stderr,"usage %s <hostname> "
+      fprintf(stderr,"usage %s <ip> "
           "<port> <num_concurrency> <total_connection_num> "
           "<num_thread>\n", argv[0]);
       exit(1);
@@ -179,18 +180,22 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
+  const struct sockaddr_in server_address = {
+    .sin_addr = inet_addr(argv[1]),
+    .sin_port = htons(atoi(argv[2])),
+    .sin_family = AF_INET
+  };
+
   pthread_barrier_init(&init_barrier, NULL, num_thread);
 
   const int step = total_concurrency / num_thread;
   pthread_t* thread_ids = (pthread_t*)malloc(num_thread*sizeof(pthread_t));
   const struct test_info info1 = {
-      .hostname = argv[1],
-      .portno = atoi(argv[2]),
+      .server = (struct sockaddr*)&server_address,
       .concurrency = step
     };
   const struct test_info info2 = {
-      .hostname = argv[1],
-      .portno = atoi(argv[2]),
+      .server = (struct sockaddr*)&server_address,
       .concurrency = total_concurrency % num_thread + step
     };
 
