@@ -12,12 +12,16 @@ long total_connection_num;
 _Atomic long failed_connection_num;
 _Atomic long success_connection_num;
 long connection_left;
+_Atomic long ok_http_resonse;
+_Atomic long bad_http_response;
 
 pthread_mutex_t connection_left_mutex;
 pthread_barrier_t init_barrier;
 
 const char HEADER[] = "GET / HTTP/1.0\r\n\r\n";
-enum Status { READING, WRITING };
+const char GOOD_HEADER[] = "HTTP/1.1 200 OK";
+
+enum Status { READING_STATUS_CODE, READING, WRITING };
 
 void http_test(struct pollfd* pollfds, int* lives,
     enum Status* status, const struct test_info* info);
@@ -57,7 +61,8 @@ void http_test(struct pollfd* pollfds, int* lives, enum Status* status,
     const struct test_info* info) {
   int remain_concurrency = info->concurrency;
   int read_err;
-  char* buffer[BUFFER_SIZE];
+  char buffer[BUFFER_SIZE];
+  char state_code_buffer[sizeof(GOOD_HEADER)];
 
   while (remain_concurrency > 0) {
     int poll_err = poll(pollfds, remain_concurrency, TIMEOUT);
@@ -99,8 +104,26 @@ new_connection:
             if ((write(pollfds[i].fd, HEADER, sizeof(HEADER))) == -1) {
               lives[i]--;
             } else {
-              status[i] = READING;
+              status[i] = READING_STATUS_CODE;
               pollfds[i].events = POLLIN;
+            }
+          } else if (status[i] == READING_STATUS_CODE &&
+              pollfds[i].revents & POLLIN) {
+            // printf("%.*s\n", sizeof(GOOD_HEADER), buffer);
+            if ((read_err = read(pollfds[i].fd, state_code_buffer,
+                    sizeof(state_code_buffer))) == -1) {
+              lives[i]--;
+            } else if (read_err == (int)sizeof(GOOD_HEADER)) {
+              if (strncmp(state_code_buffer, GOOD_HEADER, sizeof(GOOD_HEADER)-1) == 0) {
+                ok_http_resonse++;
+                status[i] = READING;
+              } else {
+                bad_http_response++;
+                status[i] = READING;
+              }
+            } else { // read less than sizeof(GOOD_HEADER) bytes, bad network!
+              bad_http_response++;
+              status[i] = READING;
             }
           } else if (status[i] == READING && pollfds[i].revents & POLLIN) {
             while ((read_err = read(pollfds[i].fd, buffer, sizeof(buffer))) > 0);
@@ -169,7 +192,11 @@ int main(int argc, char* argv[]) {
   for (int i = 0; i < num_thread; ++i) {
     pthread_join(thread_ids[i], NULL);
   }
-  printf("success: %ld, fail: %ld\n", success_connection_num, failed_connection_num);
+  printf("success: %ld, fail: %ld, 200 OK: %ld, non 200: %ld\n",
+      success_connection_num,
+      failed_connection_num,
+      ok_http_resonse,
+      bad_http_response);
 
   free(thread_ids);
   return 0;
