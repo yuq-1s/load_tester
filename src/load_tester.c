@@ -169,6 +169,11 @@ int main(int argc, char* argv[]) {
     perror("Thread number must be greater than 0\n");
     exit(1);
   }
+  if (num_thread >= total_concurrency) {
+    perror("num_thread must be smaller than total_concurrency\n");
+    exit(1);
+  }
+
   pthread_barrier_init(&init_barrier, NULL, num_thread);
 
   const int step = total_concurrency / num_thread;
