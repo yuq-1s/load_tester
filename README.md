@@ -21,9 +21,14 @@ make
 
 ## TODO
 
-1. `other response` contains those connections did not successfully transfer
-`sizeof(GOOD\_HEADER)` bytes (which may be 200 or 500)
+- add progress bar
 
-2. add progress bar
+- reuse sockaddr in `get_socket`
 
-3. reuse sockaddr in `get\_socket`
+## Known bugs
+
+- `other response` contains those connections did not successfully transfer
+`sizeof(GOOD_HEADER)` bytes (which may be 200 or 500)
+
+- threads may stuck at barrier when `num_thread` is large
+
