@@ -12,14 +12,17 @@ long total_connection_num;
 _Atomic long failed_connection_num;
 _Atomic long success_connection_num;
 long connection_left;
-_Atomic long ok_http_resonse;
-_Atomic long bad_http_response;
+_Atomic long http_response_200;
+_Atomic long http_response_500;
+_Atomic long http_response_other;
 
 pthread_mutex_t connection_left_mutex;
 pthread_barrier_t init_barrier;
 
 const char HEADER[] = "GET / HTTP/1.0\r\n\r\n";
 const char GOOD_HEADER[] = "HTTP/1.1 200 OK";
+const char ERROR_HEADER[] = "HTTP/1.1 500 OK";
+static_assert(sizeof(GOOD_HEADER) == sizeof(ERROR_HEADER), "HEADER length not match");
 
 enum Status { READING_STATUS_CODE, READING, WRITING };
 
@@ -115,14 +118,17 @@ new_connection:
               lives[i]--;
             } else if (read_err == (int)sizeof(GOOD_HEADER)) {
               if (strncmp(state_code_buffer, GOOD_HEADER, sizeof(GOOD_HEADER)-1) == 0) {
-                ok_http_resonse++;
+                http_response_200++;
+                status[i] = READING;
+              } else if (read_err == (int)sizeof(GOOD_HEADER)) {
+                http_response_500++;
                 status[i] = READING;
               } else {
-                bad_http_response++;
+                http_response_other++;
                 status[i] = READING;
               }
             } else { // read less than sizeof(GOOD_HEADER) bytes, bad network!
-              bad_http_response++;
+              http_response_other++;
               status[i] = READING;
             }
           } else if (status[i] == READING && pollfds[i].revents & POLLIN) {
@@ -192,11 +198,13 @@ int main(int argc, char* argv[]) {
   for (int i = 0; i < num_thread; ++i) {
     pthread_join(thread_ids[i], NULL);
   }
-  printf("success: %ld, fail: %ld, 200 OK: %ld, non 200: %ld\n",
+  printf("success: %ld, fail: %ld\n",
       success_connection_num,
-      failed_connection_num,
-      ok_http_resonse,
-      bad_http_response);
+      failed_connection_num);
+  printf("200 OK: %ld, 500 Internal Error: %ld, other response: %ld\n",
+      http_response_200,
+      http_response_500,
+      http_response_other);
 
   free(thread_ids);
   return 0;
