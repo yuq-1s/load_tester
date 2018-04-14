@@ -6,8 +6,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <pthread.h>
 
-#define h_addr h_addr_list[0]
+pthread_mutex_t resolve_host_mutex;
 
 struct test_info {
   const int concurrency;
@@ -32,6 +33,7 @@ void set_fl(int fd, int flags) {
 }
 
 int get_socket(const struct test_info* info) {
+  pthread_mutex_lock(&resolve_host_mutex);
   int sockfd;
   struct sockaddr_in serv_addr;
   struct hostent *server;
@@ -49,12 +51,13 @@ int get_socket(const struct test_info* info) {
   }
   memset((char *) &serv_addr, 0, sizeof(serv_addr));
   serv_addr.sin_family = AF_INET;
-  memcpy((char *)server->h_addr, 
+  memcpy((char *)server->h_addr_list[0], 
         (char *)&serv_addr.sin_addr.s_addr,
         server->h_length);
   serv_addr.sin_port = htons(info->portno);
   set_fl(sockfd, O_NONBLOCK);
   // Non blocking connect, for poll later
   connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+  pthread_mutex_unlock(&resolve_host_mutex);
   return sockfd;
 }
